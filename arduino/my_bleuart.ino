@@ -23,10 +23,6 @@ BLEUart bleuart; // uart over ble
 void setup() {
   Serial.begin(115200);
 
-  while (!Serial) {
-    /* Wait for serial to be ready */
-  }
-
   Serial.println("Bluefruit52 BLEUART Example");
   Serial.println("---------------------------\n");
 
