@@ -213,7 +213,7 @@ class ERMMotors:
                 master=window
             )
             frame.grid(row=labels_row, column=i)
-            self.pin_labels.append(tk.Label(master=frame, text=f"Solenoid {i}"))
+            self.pin_labels.append(tk.Label(master=frame, text=f"ERM {i}"))
             self.pin_labels[i].pack(padx=5, pady=5)
 
         # Add the second row - pin number inputs
