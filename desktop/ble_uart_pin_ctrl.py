@@ -1,9 +1,10 @@
 import struct
-import time
 from enum import IntEnum
 
 from bleak import BleakScanner, BleakClient
-from typing import List, Tuple
+from typing import List, Optional, Callable
+
+from bleak.backends.client import BaseBleakClient
 
 
 def _rx_callback(sender, data):
@@ -70,7 +71,8 @@ class BleUartPinCtrl:
                     break
 
         if self.device is None:
-            raise RuntimeError("Could not find a device with the given name", device_name)
+            raise RuntimeError("Could not find a device with the given name or with the Nordic UART service",
+                               device_name)
 
         # Get the client and wait for a connection
         self.client = BleakClient(self.device)
@@ -82,6 +84,20 @@ class BleUartPinCtrl:
         await self.client.start_notify(self.NUS_TX_CHAR, _rx_callback)
 
         return self
+
+    def get_mac(self) -> str:
+        """
+        Gets the MAC address of the connected BLE device
+        :return: a string containing the device's MAC address
+        """
+        return str(self.device.address)
+
+    def set_disconnect_callback(self, callback: Optional[Callable[[BaseBleakClient], None]]):
+        """
+        Sets the callback to be called when BLE device is disconnected
+        :param callback:
+        """
+        self.client.set_disconnected_callback(callback)
 
     async def configure_gpio(self, port: int, pins: List[int], is_output: bool):
         """
@@ -134,13 +150,13 @@ class BleUartPinCtrl:
         """
         raise NotImplementedError("TODO CMK(11/15/20): Implement query_gpio")
 
-    async def set_pwm(self, port: int, pins: List[int], intensity: int):
+    async def set_pwm(self, port: int, pins: List[int], duty_cycle: int):
         """
         Sets PWM output on the connected device. The byte format is:
             <command 1-byte> <port 4-bytes> <pin mask 4-bytes> <intensity 1-byte>
         :param port: port number to configure
         :param pins: list of pins to configure
-        :param intensity: duty cycle of the PWM cycle (duty cycle is intensity / 255)
+        :param duty_cycle: duty cycle of the PWM cycle (duty cycle is intensity / 255)
         """
         # Form the pin mask
         pin_mask = 0
@@ -148,7 +164,7 @@ class BleUartPinCtrl:
             pin_mask = pin_mask | (1 << pin)
 
         # Pack it all into a byte buffer (LE byte, LE 4 bytes, LE 4 bytes, LE byte
-        byte_buffer = struct.pack("!BLLB", BleUartPinCtrlCommands.PWM_SET, port, pin_mask, intensity)
+        byte_buffer = struct.pack("!BLLB", BleUartPinCtrlCommands.PWM_SET, port, pin_mask, duty_cycle)
 
         print("set_pwm sending: ", byte_buffer)
 
@@ -161,3 +177,5 @@ class BleUartPinCtrl:
         """
         raise NotImplementedError("TODO CMK(11/15/20): Implement query_state")
 
+    async def pulse_gpio(self, port: int, pins: List[int], duration: int):
+        pass  # TODO CMK(11/17/20): implement
