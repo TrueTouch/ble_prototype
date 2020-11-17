@@ -17,11 +17,21 @@ def _rx_callback(sender, data):
 
 class BleUartPinCtrlCommands(IntEnum):
     GPIO_CONFIGURE = 0x01
-    GPIO_SET = 0x02
-    GPIO_CLEAR = 0x03
+    GPIO_WRITE = 0x02
+    GPIO_PULSE = 0x03
     GPIO_QUERY = 0x04
     PWM_SET = 0x05
     QUERY_STATE = 0x06
+
+
+class BleUartPinCtrlGpioDirections(IntEnum):
+    DIR_INPUT = 0x00,
+    DIR_OUTPUT = 0x01
+
+
+class BleUartPinCtrlGpioOutputs(IntEnum):
+    OUT_LOW = 0x00,
+    OUT_HIGH = 0x01
 
 
 class BleUartPinCtrl:
@@ -99,47 +109,48 @@ class BleUartPinCtrl:
         """
         self.client.set_disconnected_callback(callback)
 
-    async def configure_gpio(self, port: int, pins: List[int], is_output: bool):
+    async def configure_gpio(self, port: int, pins: List[int], direction: BleUartPinCtrlGpioDirections):
         """
         Configures GPIO on the connected device. The byte format is:
             <command 1-byte> <port 4-bytes> <pin mask 4-bytes> <0x00 = input, 0x01 = output>
         :param port: port number to configure
         :param pins: list of pins to configure
-        :param is_output: whether to configure the pins as outputs (true) or inputs (false)
+        :param direction: which directon to configure the pins as
         """
-        # Form the pin mask
-        pin_mask = 0
-        for pin in pins:
-            pin_mask = pin_mask | (1 << pin)
-
         # Pack it all into a byte buffer (LE byte, LE 4 bytes, LE 4 bytes, LE byte
         byte_buffer = struct.pack("!BLLB", BleUartPinCtrlCommands.GPIO_CONFIGURE,
-                                  port, pin_mask, 0x01 if is_output else 0x00)
+                                  port, BleUartPinCtrl.pin_list_to_bitmask(pins), int(direction))
 
         print("configure_gpio sending: ", byte_buffer)
 
         # Transmit the byte buffer
         await self.client.write_gatt_char(self.NUS_RX_CHAR, bytearray(byte_buffer))
 
-    async def write_gpio(self, port: int, pins: List[int], output_high: bool):
+    async def write_gpio(self, port: int, pins: List[int], output: BleUartPinCtrlGpioOutputs):
         """
         Controls GPIO on the connected device. The byte format is:
             <command 1-byte> <port 4-bytes> <pin mask 4-bytes>
         :param port: port number to configure
         :param pins: list of pins to configure
-        :param output_high: whether to set the pins output high (true) or low (false)
+        :param output: what output level to set on the GPIO
         """
-        # Form the pin mask
-        pin_mask = 0
-        for pin in pins:
-            pin_mask = pin_mask | (1 << pin)
-
         # Pack it all into a byte buffer (LE byte, LE 4 bytes, LE 4 bytes, LE byte
-        byte_buffer = struct.pack("!BLL",
-                                  BleUartPinCtrlCommands.GPIO_SET if output_high else BleUartPinCtrlCommands.GPIO_CLEAR,
-                                  port, pin_mask)
+        byte_buffer = struct.pack("!BLLB",
+                                  BleUartPinCtrlCommands.GPIO_WRITE,
+                                  port, BleUartPinCtrl.pin_list_to_bitmask(pins), int(output))
 
         print("write_gpio sending: ", byte_buffer)
+
+        # Transmit the byte buffer
+        await self.client.write_gatt_char(self.NUS_RX_CHAR, bytearray(byte_buffer))
+
+    async def pulse_gpio(self, port: int, pins: List[int], duration_ms: int):
+        # Pack it all into a byte buffer (LE byte, LE 4 bytes, LE 4 bytes, LE byte
+        byte_buffer = struct.pack("!BLLL",
+                                  BleUartPinCtrlCommands.GPIO_PULSE,
+                                  port, BleUartPinCtrl.pin_list_to_bitmask(pins), duration_ms)
+
+        print("pulse_gpio sending: ", byte_buffer)
 
         # Transmit the byte buffer
         await self.client.write_gatt_char(self.NUS_RX_CHAR, bytearray(byte_buffer))
@@ -158,13 +169,9 @@ class BleUartPinCtrl:
         :param pins: list of pins to configure
         :param duty_cycle: duty cycle of the PWM cycle (duty cycle is intensity / 255)
         """
-        # Form the pin mask
-        pin_mask = 0
-        for pin in pins:
-            pin_mask = pin_mask | (1 << pin)
-
         # Pack it all into a byte buffer (LE byte, LE 4 bytes, LE 4 bytes, LE byte
-        byte_buffer = struct.pack("!BLLB", BleUartPinCtrlCommands.PWM_SET, port, pin_mask, duty_cycle)
+        byte_buffer = struct.pack("!BLLB", BleUartPinCtrlCommands.PWM_SET,
+                                  port, BleUartPinCtrl.pin_list_to_bitmask(pins), duty_cycle)
 
         print("set_pwm sending: ", byte_buffer)
 
@@ -177,5 +184,15 @@ class BleUartPinCtrl:
         """
         raise NotImplementedError("TODO CMK(11/15/20): Implement query_state")
 
-    async def pulse_gpio(self, port: int, pins: List[int], duration: int):
-        pass  # TODO CMK(11/17/20): implement
+    @staticmethod
+    def pin_list_to_bitmask(pins: List[int]) -> int:
+        """
+        Converts a string of pin numbers into a bitmask where each pin number is converted to a set bit of the
+            corresponding position.
+        :param pins: list of pin numbers to form into a bitmask
+        :return: bitmask
+        """
+        pin_mask = 0
+        for pin in pins:
+            pin_mask = pin_mask | (1 << pin)
+        return pin_mask

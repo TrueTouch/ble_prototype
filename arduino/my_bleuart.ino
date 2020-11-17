@@ -20,6 +20,9 @@
 // BLE Service
 BLEUart bleuart; // uart over ble
 
+/* BLE UART pin controller */
+ble_uart_pin_ctrl::PinCtrl pin_controller(&bleuart);
+
 void setup() {
   Serial.begin(115200);
 
@@ -82,7 +85,7 @@ void startAdv(void) {
 
 void loop() {
   // service pin control
-  BleUartPinCtrl::service(&bleuart);
+  pin_controller.service();
 }
 
 // callback invoked when central connects

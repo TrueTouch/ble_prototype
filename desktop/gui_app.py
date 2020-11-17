@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import ttk
 
 
-from ble_uart_pin_ctrl import BleUartPinCtrl
+from ble_uart_pin_ctrl import BleUartPinCtrl, BleUartPinCtrlGpioOutputs, BleUartPinCtrlGpioDirections
 
 
 class Solenoids:
@@ -126,7 +126,10 @@ class Solenoids:
         Converts the value in the duration input box to an integer and returns it
         :return: activation length as an integer in units of ms
         """
-        pulse_dur = int(self.pulse_dur_input.get())
+        pulse_dur_str = self.pulse_dur_input.get()
+        if len(pulse_dur_str) == 0:  # user hasn't entered anything yet
+            return 0
+        pulse_dur = int(pulse_dur_str)
         if pulse_dur < 0:
             raise ValueError("Solenoid pules duration cannot be negative")
         return pulse_dur
@@ -275,7 +278,10 @@ class ERMMotors:
         Converts the value in the duration input box to an integer and returns it
         :return: activation length as an integer in units of ms
         """
-        intensity = int(self.intensity_input.get())
+        intensity_str = self.intensity_input.get()
+        if len(intensity_str) == 0:  # user hasn't entered anything yet
+            return 0
+        intensity = int(intensity_str)
         if intensity > 255 or intensity < 0:  # check for values too large
             raise ValueError("Motor duty_cycle not in range [0, 255]")
         return intensity
@@ -377,6 +383,7 @@ class BLEApp:
         frame.grid(row=buttons_row, column=2)
         self.execute_button = tk.Button(master=frame, text="Execute Commands", command=self.on_execute)
         self.execute_button.pack(padx=5, pady=5)
+        self.execute_button["state"] = "disabled"
 
         # Add third row - status info
         status_label_row = window.grid_size()[1]
@@ -405,6 +412,7 @@ class BLEApp:
             self.status_label_var.set("Could not connect: {}".format(str(err)))
         else:  # Connected successfully, setup callbacks and update GUI state
             self.gpio_conf_button["state"] = "normal"
+            self.execute_button["state"] = "normal"
             self.status_label_var.set("Connected!")
             self.pin_ctrl.set_disconnect_callback(self.on_disconnect)
             self.conn_state_var.set("Connected: {}".format(self.pin_ctrl.get_mac()))
@@ -418,11 +426,13 @@ class BLEApp:
 
     async def on_gpio_conf_async(self, pins: List[int]):
         try:
-            await self.pin_ctrl.configure_gpio(port=0, pins=pins, is_output=True)
+            await self.pin_ctrl.configure_gpio(port=0, pins=pins, direction=BleUartPinCtrlGpioDirections.DIR_OUTPUT)
         except RuntimeError as err:  # Couldn't configure, update GUI state
             self.status_label_var.set("Could not configure GPIO: {}".format(str(err)))
         else:  # Connected successfully, setup callbacks and update GUI state
             self.status_label_var.set("Successfully configured GPIO as outputs!")
+        self.gpio_conf_button["state"] = "normal"
+        self.execute_button["state"] = "normal"
 
     def on_gpio_conf(self):
         # Get list of pins to configure
@@ -432,6 +442,7 @@ class BLEApp:
 
         # Disable buttons no longer used
         self.gpio_conf_button["state"] = "disabled"
+        self.execute_button["state"] = "disabled"
         self.status_label_var.set("Configuring as outputs: {} ...".format(pins))
         # start a new thread to run coroutine while keeping other GUI elements interactive
         threading.Thread(target=lambda: self.loop.run_until_complete(self.on_gpio_conf_async(pins))).start()
@@ -445,7 +456,7 @@ class BLEApp:
                 temp_str += "\nSetting high: {}...".format(high_solenoids)
                 self.status_label_var.set(temp_str)
 
-                await self.pin_ctrl.write_gpio(port=0, pins=high_solenoids, output_high=True)
+                await self.pin_ctrl.write_gpio(port=0, pins=high_solenoids, output=BleUartPinCtrlGpioOutputs.OUT_HIGH)
                 time.sleep(0.1)  # sleep for a little bit so things don't get flooded
 
             # Are there solenoids to set low?
@@ -454,7 +465,7 @@ class BLEApp:
                 temp_str += "\nSetting low: {}...".format(low_solenoids)
                 self.status_label_var.set(temp_str)
 
-                await self.pin_ctrl.write_gpio(port=0, pins=low_solenoids, output_high=False)
+                await self.pin_ctrl.write_gpio(port=0, pins=low_solenoids, output=BleUartPinCtrlGpioOutputs.OUT_LOW)
                 time.sleep(0.1)  # sleep for a little bit so things don't get flooded
 
             # Are there solenoids to pulse?
@@ -463,7 +474,7 @@ class BLEApp:
                 temp_str += "\nPulsing for {} ms: {}...".format(pulse_duration, pulse_solenoids)
                 self.status_label_var.set(temp_str)
 
-                await self.pin_ctrl.pulse_gpio(port=0, pins=pulse_solenoids, duration=pulse_duration)
+                await self.pin_ctrl.pulse_gpio(port=0, pins=pulse_solenoids, duration_ms=pulse_duration)
                 time.sleep(0.1)  # sleep for a little bit so things don't get flooded
 
             # Are there ERMs to PWM?
@@ -476,9 +487,11 @@ class BLEApp:
                 time.sleep(0.1)  # sleep for a little bit so things don't get flooded
         except RuntimeError as err:  # Couldn't execute, update GUI state
             self.execute_button["state"] = "normal"
+            self.gpio_conf_button["state"] = "normal"
             self.status_label_var.set("Could not execute commands: {}".format(str(err)))
         else:
             self.execute_button["state"] = "normal"
+            self.gpio_conf_button["state"] = "normal"
             temp_str = self.status_label_var.get()
             temp_str += "\nSuccess!"
             self.status_label_var.set(temp_str)
@@ -486,12 +499,14 @@ class BLEApp:
     def on_execute(self):
         # Disable necessary GUI elements
         self.execute_button["state"] = "disabled"
+        self.gpio_conf_button["state"] = "disabled"
         # Format a string to describe what's happening
         try:
             action_str = self.solenoids.get_action_str()
             action_str += self.motors.get_action_str()
         except ValueError as err:
             self.execute_button["state"] = "normal"
+            self.gpio_conf_button["state"] = "normal"
             self.status_label_var.set("Value error: {}".format(err))
         else:
             self.status_label_var.set("Executing Actions...")
@@ -509,6 +524,7 @@ class BLEApp:
 
     def on_disconnect(self, client):
         self.connect_button["state"] = "normal"
+        self.execute_button["state"] = "disabled"
         self.gpio_conf_button["state"] = "disabled"
         self.status_label_var.set("Disconnected from {}".format(client.address))
         self.conn_state_var.set("Disconnected")
