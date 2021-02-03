@@ -15,26 +15,27 @@ def _rx_callback(sender, data):
     print("Rx {0}: {1}".format(sender, data))
 
 
-class BleUartPinCtrlCommands(IntEnum):
-    GPIO_CONFIGURE = 0x01
-    GPIO_WRITE = 0x02
-    GPIO_PULSE = 0x03
-    GPIO_QUERY = 0x04
-    PWM_SET = 0x05
-    QUERY_STATE = 0x06
+class TrueTouchCommands(IntEnum):
+    SOLENOID_WRITE = 0x01
+    SOLENOID_PULSE = 0x02
+    ERM_SET = 0x03
 
 
-class BleUartPinCtrlGpioDirections(IntEnum):
-    DIR_INPUT = 0x00,
-    DIR_OUTPUT = 0x01
+class TrueTouchFinger(IntEnum):
+    THUMB = 0x00,
+    INDEX = 0x01,
+    MIDDLE = 0x02,
+    RING = 0x03,
+    PINKY = 0x04,
+    PALM = 0x05
 
 
-class BleUartPinCtrlGpioOutputs(IntEnum):
+class TrueTouchGpioOutputs(IntEnum):
     OUT_LOW = 0x00,
     OUT_HIGH = 0x01
 
 
-class BleUartPinCtrl:
+class TrueTouch:
     NORDIC_UART_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
     NUS_RX_CHAR = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
     NUS_TX_CHAR = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
@@ -61,7 +62,7 @@ class BleUartPinCtrl:
         Creates and initializes a BLE connection to a target device running the Nordic UART service.
         :param device_name: Name of the device to connect to.
         """
-        self = BleUartPinCtrl()
+        self = TrueTouch()
 
         # Gather and look through devices for one that matches the target name
         devices = await BleakScanner.discover()
@@ -109,90 +110,63 @@ class BleUartPinCtrl:
         """
         self.client.set_disconnected_callback(callback)
 
-    async def configure_gpio(self, port: int, pins: List[int], direction: BleUartPinCtrlGpioDirections):
-        """
-        Configures GPIO on the connected device. The byte format is:
-            <command 1-byte> <port 4-bytes> <pin mask 4-bytes> <0x00 = input, 0x01 = output>
-        :param port: port number to configure
-        :param pins: list of pins to configure
-        :param direction: which directon to configure the pins as
-        """
-        # Pack it all into a byte buffer (LE byte, LE 4 bytes, LE 4 bytes, LE byte
-        byte_buffer = struct.pack("!BLLB", BleUartPinCtrlCommands.GPIO_CONFIGURE,
-                                  port, BleUartPinCtrl.pin_list_to_bitmask(pins), int(direction))
-
-        print("configure_gpio sending: ", byte_buffer)
-
-        # Transmit the byte buffer
-        await self.client.write_gatt_char(self.NUS_RX_CHAR, bytearray(byte_buffer))
-
-    async def write_gpio(self, port: int, pins: List[int], output: BleUartPinCtrlGpioOutputs):
+    async def write_gpio(self, fingers: List[TrueTouchFinger], output: TrueTouchGpioOutputs):
         """
         Controls GPIO on the connected device. The byte format is:
-            <command 1-byte> <port 4-bytes> <pin mask 4-bytes>
-        :param port: port number to configure
-        :param pins: list of pins to configure
+            <command 1-byte> <finger bitset 4-bytes> <output 1-byte>
+        :param fingers: fingers to configure
         :param output: what output level to set on the GPIO
         """
-        # Pack it all into a byte buffer (LE byte, LE 4 bytes, LE 4 bytes, LE byte
-        byte_buffer = struct.pack("!BLLB",
-                                  BleUartPinCtrlCommands.GPIO_WRITE,
-                                  port, BleUartPinCtrl.pin_list_to_bitmask(pins), int(output))
+        # Pack it all into a byte buffer (LE byte, LE 4 bytes, LE byte
+        byte_buffer = struct.pack("!BLB", TrueTouchCommands.SOLENOID_WRITE,
+                                  TrueTouch.finger_list_to_bitmask(fingers), int(output))
 
         print("write_gpio sending: ", byte_buffer)
 
         # Transmit the byte buffer
         await self.client.write_gatt_char(self.NUS_RX_CHAR, bytearray(byte_buffer))
 
-    async def pulse_gpio(self, port: int, pins: List[int], duration_ms: int):
-        # Pack it all into a byte buffer (LE byte, LE 4 bytes, LE 4 bytes, LE byte
-        byte_buffer = struct.pack("!BLLL",
-                                  BleUartPinCtrlCommands.GPIO_PULSE,
-                                  port, BleUartPinCtrl.pin_list_to_bitmask(pins), duration_ms)
+    async def pulse_gpio(self, fingers: List[TrueTouchFinger], duration_ms: int):
+        """
+        Pulses GPIO on the connected device. The byte format is:
+            <command 1-byte> <finger bitset 4-bytes> <duration 4-byte>
+        :param fingers: fingers to pulse
+        :param duration_ms: pulse duration in ms
+        """
+        # Pack it all into a byte buffer (LE byte, LE 4 bytes, LE 4 bytes
+        byte_buffer = struct.pack("!BLL", TrueTouchCommands.SOLENOID_PULSE,
+                                  TrueTouch.finger_list_to_bitmask(fingers), duration_ms)
 
         print("pulse_gpio sending: ", byte_buffer)
 
         # Transmit the byte buffer
         await self.client.write_gatt_char(self.NUS_RX_CHAR, bytearray(byte_buffer))
 
-    async def query_gpio(self, port: int, pins: List[int]):
-        """
-        TODO
-        """
-        raise NotImplementedError("TODO CMK(11/15/20): Implement query_gpio")
-
-    async def set_pwm(self, port: int, pins: List[int], duty_cycle: int):
+    async def set_pwm(self, fingers: List[TrueTouchFinger], duty_cycle: int):
         """
         Sets PWM output on the connected device. The byte format is:
-            <command 1-byte> <port 4-bytes> <pin mask 4-bytes> <intensity 1-byte>
-        :param port: port number to configure
-        :param pins: list of pins to configure
+            <command 1-byte> <finger bitset 4-bytes> <intensity 1-byte>
+        :param fingers: fingers to set ERM on
         :param duty_cycle: duty cycle of the PWM cycle (duty cycle is intensity / 255)
         """
-        # Pack it all into a byte buffer (LE byte, LE 4 bytes, LE 4 bytes, LE byte
-        byte_buffer = struct.pack("!BLLB", BleUartPinCtrlCommands.PWM_SET,
-                                  port, BleUartPinCtrl.pin_list_to_bitmask(pins), duty_cycle)
+        # Pack it all into a byte buffer (LE byte, LE 4 bytes, LE byte
+        byte_buffer = struct.pack("!BLB", TrueTouchCommands.ERM_SET,
+                                  TrueTouch.finger_list_to_bitmask(fingers), duty_cycle)
 
         print("set_pwm sending: ", byte_buffer)
 
         # Transmit the byte buffer
         await self.client.write_gatt_char(self.NUS_RX_CHAR, bytearray(byte_buffer))
 
-    async def query_state(self, port: int, pins: List[int]):
-        """
-        TODO
-        """
-        raise NotImplementedError("TODO CMK(11/15/20): Implement query_state")
-
     @staticmethod
-    def pin_list_to_bitmask(pins: List[int]) -> int:
+    def finger_list_to_bitmask(fingers: List[TrueTouchFinger]) -> int:
         """
-        Converts a string of pin numbers into a bitmask where each pin number is converted to a set bit of the
-            corresponding position.
-        :param pins: list of pin numbers to form into a bitmask
+        Converts a list of fingers into a bitmask usable by the TrueTouch device
+        :param fingers: list of fingers to form into a bitmask
         :return: bitmask
         """
-        pin_mask = 0
-        for pin in pins:
-            pin_mask = pin_mask | (1 << pin)
-        return pin_mask
+        bitmask = 0
+        for finger in fingers:
+            bitmask = bitmask | (1 << int(finger))
+
+        return bitmask
