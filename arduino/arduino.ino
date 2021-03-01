@@ -39,6 +39,8 @@ static const int ERM_PINS[TrueTouch::ERM_COUNT] = {
 TrueTouch truetouch(&bleuart, SOLENOID_PINS, ERM_PINS);
 
 void setup() {
+    truetouch.init();
+  
     Serial.begin(115200);
 
     Serial.println("TrueTouch Arduino Example");
@@ -56,7 +58,7 @@ void setup() {
 
     Bluefruit.begin();
     Bluefruit.setTxPower(4); // Check bluefruit.h for supported values
-    Bluefruit.setName("Bluefruit52");
+    Bluefruit.setName("TrueTouch");
     //Bluefruit.setName(getMcuUniqueID()); // useful testing with multiple central connections
     Bluefruit.Periph.setConnectCallback(connect_callback);
     Bluefruit.Periph.setDisconnectCallback(disconnect_callback);

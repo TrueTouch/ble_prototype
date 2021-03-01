@@ -30,7 +30,13 @@ TrueTouch::TrueTouch(BLEUart *uart, const int *solenoid_pins, const int *erm_pin
     /* Store all the used pins */
     std::memcpy(_solenoid_pins, solenoid_pins, sizeof(_solenoid_pins));
     std::memcpy(_erm_pins, erm_pins, sizeof(_erm_pins));
+}
 
+TrueTouch::~TrueTouch() {
+
+}
+
+void TrueTouch::init() {
     /* Configure all used pins as outputs and set low */
     for (std::size_t i = 0; i < SOLENOID_COUNT; ++i) {
         pinMode(_solenoid_pins[i], OUTPUT);
@@ -41,10 +47,6 @@ TrueTouch::TrueTouch(BLEUart *uart, const int *solenoid_pins, const int *erm_pin
         pinMode(_erm_pins[i], OUTPUT);
         digitalWrite(_erm_pins[i], LOW);
     }
-}
-
-TrueTouch::~TrueTouch() {
-
 }
 
 void TrueTouch::service() {

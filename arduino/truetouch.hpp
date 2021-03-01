@@ -92,6 +92,12 @@ public:
 
     virtual ~TrueTouch();
 
+    /**
+     * Arduino initializes some stuff after our static ctor runs, so we have to manually init stuff
+     * in the setup function.
+     */
+    void init();
+
     /** Services any pending data read by this device. */
     void service();
 
