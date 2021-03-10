@@ -58,6 +58,10 @@ void TrueTouch::service() {
         return;
     }
 
+    DBG_LOG("In buffer: ");
+    DBG_LOG(_uart->available());
+    DBG_LOG_LINE("");
+
     /* First byte is command, peek that */
     const Command command = static_cast<Command>(_uart->peek());
 
@@ -132,13 +136,13 @@ void TrueTouch::handle_solenoid_pulse() {
 
     /* Start the first pulse (set the pin high and record the start time) */
     int pin_idx = util::get_highest_bit(_fingers_to_pulse);
-    if (pin_idx < 0 || pin_idx >= ERM_COUNT) {
+    if (pin_idx < 0 || pin_idx >= SOLENOID_COUNT) {
         Serial.println("!!! Invalid values in pulse");
         _fingers_to_pulse = 0;
         return;
     }
 
-    int pin = _erm_pins[pin_idx];
+    int pin = _solenoid_pins[pin_idx];
 
     DBG_LOG("Pulsing pin ");
     DBG_LOG(pin);
@@ -189,13 +193,13 @@ void TrueTouch::service_gpio_pulse() {
 
     /* Set the pin low */
     int pin_idx = util::get_highest_bit(_fingers_to_pulse);
-    if (pin_idx < 0 || pin_idx >= ERM_COUNT) {
+    if (pin_idx < 0 || pin_idx >= SOLENOID_COUNT) {
         Serial.println("!!! Invalid values in pulse");
         _fingers_to_pulse = 0;
         return;
     }
 
-    auto pin = _erm_pins[pin_idx];
+    auto pin = _solenoid_pins[pin_idx];
 
     digitalWrite(pin, LOW);
     util::clear_highest_bit(_fingers_to_pulse);
@@ -209,13 +213,13 @@ void TrueTouch::service_gpio_pulse() {
 
     /* Start next pulse */
     pin_idx = util::get_highest_bit(_fingers_to_pulse);
-    if (pin_idx < 0 || pin_idx >= ERM_COUNT) {
+    if (pin_idx < 0 || pin_idx >= SOLENOID_COUNT) {
         Serial.println("!!! Invalid values in pulse");
         _fingers_to_pulse = 0;
         return;
     }
 
-    pin = _erm_pins[pin_idx];
+    pin = _solenoid_pins[pin_idx];
 
     DBG_LOG("Pulsing pin ");
     DBG_LOG(pin);

@@ -20,28 +20,35 @@
 static BLEUart bleuart;
 
 static const int SOLENOID_PINS[TrueTouch::SOLENOID_COUNT] = {
-        A0,
-        A1,
-        A2,
-        A3,
-        A4,
+        A0, /* Thumb */
+        A1, /* Index */
+        A2, /* Middle */
+        A3, /* Ring */
+        A4, /* Pinky */
 };
 
 static const int ERM_PINS[TrueTouch::ERM_COUNT] = {
-        5,
-        6,
-        9,
-        10,
-        11,
-        12
+        5,  /* Thumb */
+        6,  /* Index */
+        9,  /* Middle */
+        10, /* Ring */
+        11, /* Pinky */
+        12  /* Palm */
 };
 
 TrueTouch truetouch(&bleuart, SOLENOID_PINS, ERM_PINS);
 
 void setup() {
     truetouch.init();
+
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, HIGH);
   
     Serial.begin(115200);
+
+    while (!Serial) {
+      
+    }
 
     Serial.println("TrueTouch Arduino Example");
     Serial.println("---------------------------\n");
@@ -100,8 +107,17 @@ void startAdv(void) {
     Bluefruit.Advertising.start(0);             // 0 = Don't stop advertising after n seconds
 }
 
+static int prev_time = 0;
+static bool state = 0;
+
 void loop() {
     truetouch.service();
+
+    if (millis() - prev_time > 500) {
+      prev_time = millis();
+      state ^= true;
+      digitalWrite(LED_BUILTIN, state);
+    }
 }
 
 // callback invoked when central connects
