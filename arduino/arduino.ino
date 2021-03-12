@@ -20,20 +20,20 @@
 static BLEUart bleuart;
 
 static const int SOLENOID_PINS[TrueTouch::SOLENOID_COUNT] = {
+        13, /* Thumb */
+        12, /* Index */
+        11, /* Middle */
+        10, /* Ring */
+        9,  /* Pinky */
+};
+
+static const int ERM_PINS[TrueTouch::ERM_COUNT] = {
         A0, /* Thumb */
         A1, /* Index */
         A2, /* Middle */
         A3, /* Ring */
         A4, /* Pinky */
-};
-
-static const int ERM_PINS[TrueTouch::ERM_COUNT] = {
-        5,  /* Thumb */
-        6,  /* Index */
-        9,  /* Middle */
-        10, /* Ring */
-        11, /* Pinky */
-        12  /* Palm */
+        A5  /* Palm */
 };
 
 TrueTouch truetouch(&bleuart, SOLENOID_PINS, ERM_PINS);
@@ -66,7 +66,6 @@ void setup() {
     Bluefruit.begin();
     Bluefruit.setTxPower(4); // Check bluefruit.h for supported values
     Bluefruit.setName("TrueTouch");
-    //Bluefruit.setName(getMcuUniqueID()); // useful testing with multiple central connections
     Bluefruit.Periph.setConnectCallback(connect_callback);
     Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
 
